@@ -1,0 +1,7 @@
+# Ignorar ambientes virtuais
+hair_segmentation_env/
+
+# Ignorar arquivos grandes e binários
+*.so
+*.dll
+*.exe
