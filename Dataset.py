@@ -19,13 +19,13 @@ def load_face_detector():
         raise ValueError("Erro: Não foi possível carregar o Haarcascade!")
     return face_cascade
 
-def exclude_face_regions(hair_mask, faces, margin=90):
+def exclude_face_regions(hair_mask, faces, margin=100):
     mask_no_faces = hair_mask.copy()
     for (x, y, w, h) in faces:
         mask_no_faces[y + h:, :] = 0  # Zera abaixo do rosto
-        x_start = max(x + int(0.1 * w), 8)
-        y_start = max(y + int(0.1 * h), 1)
-        x_end = min(x + w - int(0.1 * w), mask_no_faces.shape[1])
+        x_start = max(x + int(0.0 * w), 10)
+        y_start = max(y + int(0.1 * h), 3)
+        x_end = min(x + w - int(0.0 * w), mask_no_faces.shape[1])
         y_end = min(y + h + int(0.1 * h), mask_no_faces.shape[0])
         mask_no_faces[y_start:y_end, x_start:x_end] = 0  # Zera ao redor do rosto
     return mask_no_faces
@@ -37,7 +37,7 @@ def refine_mask(mask, min_area=40):
         if stats[i, cv2.CC_STAT_AREA] >= min_area:
             refined_mask[labels == i] = 255
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
-    refined_mask = cv2.morphologyEx(refined_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    refined_mask = cv2.morphologyEx(refined_mask, cv2.MORPH_CLOSE, kernel, iterations=4)
     return refined_mask
 
 def save_mask(mask, filename, masks_directory):
@@ -55,7 +55,7 @@ def process_image(image_file, face_cascade):
 
     # Conversão para escala de cinza e detecção de faces
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=2, minSize=(50, 50))
 
     # Inicializa o MediaPipe Selfie Segmentation
     mp_selfie_segmentation = mp.solutions.selfie_segmentation
