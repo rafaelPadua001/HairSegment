@@ -5,20 +5,26 @@ from tensorflow.keras.models import load_model
 import matplotlib.pyplot as plt
 
 # Carregar o modelo treinado
-model = load_model('/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegmentTrain/dataset/outputs/best_model.keras')
+model = load_model('/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/outputs/best_model.keras')
 
 # Caminho para a pasta de imagens de teste
-test_images_path = '/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegmentTrain/dataset/testeImage'
+test_images_path = '/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/testeImage'
 
 # Função para pré-processar as imagens
 def preprocess_image(image_path):
     img = cv2.imread(image_path)  # Ler a imagem
-    img = cv2.resize(img, (256, 256))  # Redimensionar para o tamanho que o modelo espera (758x758)
-    img = img / 255.0  # Normalizar os pixels para a faixa [0, 1]
+    if img is None:
+        raise FileNotFoundError(f"Não foi possível carregar a imagem: {image_path}")
+    
+    # Redimensionar para o tamanho que o modelo espera
+    img = cv2.resize(img, (256, 256))
+    
+    # Normalizar os pixels para a faixa [0, 1]
+    img = img / 255.0
     return img
 
 # Listar todas as imagens no diretório de teste
-test_images = [os.path.join(test_images_path, img) for img in os.listdir(test_images_path) if img.endswith(('.png', '.jpg', '.jpeg'))]
+test_images = [os.path.join(test_images_path, img) for img in os.listdir(test_images_path) if img.lower().endswith(('.png', '.jpg', '.jpeg'))]
 
 # Listas para armazenar resultados
 predictions = []
