@@ -10,13 +10,13 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 
 # Definição de Constantes e Caminhos
-CSV_PATH = '/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegmentTrain/dataset/annotations/dados_faces.csv'
-IMAGE_DIR = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegmentTrain/dataset/images"
-MASK_DIR = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegmentTrain/dataset/newMasks"
-OUTPUT_DIR = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegmentTrain/dataset/outputs"
+CSV_PATH = '/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/annotations/dados_faces.csv'
+IMAGE_DIR = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/images"
+MASK_DIR = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/newMasks"
+OUTPUT_DIR = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/outputs"
 IMAGE_SIZE = (256, 256)  # Tamanho aumentado para melhorar a qualidade da saída
 EPOCHS = 200
-BATCH_SIZE = 2  # Ajuste para otimizar o uso de memória
+BATCH_SIZE = 16  # Ajuste para otimizar o uso de memória
 
 def validate_coordinates(row: pd.Series) -> bool:
     coords = row[['xmin', 'ymin', 'xmax', 'ymax']]
