@@ -13,8 +13,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 IMAGE_DIR = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/images"
 OUTPUT_CSV = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/annotations/dados_faces.csv"
 MASKS_DIR = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/newMasks"
-MIN_AREA = 5
-MARGIN = 1
+MARGIN = 5
+
+mp_face_detection = mp.solutions.face_detection
 
 def load_face_detector():
     """Carrega o modelo Haarcascade para detecção de faces."""
@@ -23,53 +24,66 @@ def load_face_detector():
         raise ValueError("Erro: Não foi possível carregar o Haarcascade!")
     return face_cascade
 
-def exclude_face_regions(hair_mask, faces, margin=1, width_reduction=0.95, preserve_hair=True):
+def exclude_face_regions(hair_mask, faces, margin=5, width_reduction=0.1, forehead_ratio=0.1, preserve_hair=True):
     """
-    Exclui regiões do rosto e partes inferiores da máscara de cabelo, ajustando ao formato do rosto.
-    - hair_mask: máscara de cabelo original.
-    - faces: lista de rostos detectados.
-    - margin: margem ao redor do rosto (vertical).
-    - width_reduction: proporção para reduzir a largura da região excluída.
-    - preserve_hair: preserva a parte superior do cabelo.
-    """
-    mask_no_faces = hair_mask.copy()
+    Exclui regiões do rosto da máscara de cabelo, incluindo a testa com base em uma proporção ajustável.
     
+    Args:
+        hair_mask (numpy.ndarray): Máscara binária do cabelo.
+        faces (list): Coordenadas (x, y, w, h) dos rostos detectados.
+        margin (int): Margem adicional ao redor do rosto para exclusão.
+        width_reduction (float): Proporção para reduzir a largura da área excluída.
+        forehead_ratio (float): Proporção da altura do rosto a ser usada como testa.
+        preserve_hair (bool): Se True, preserva parte do cabelo acima do rosto.
+        
+    Returns:
+        numpy.ndarray: Máscara sem as regiões do rosto.
+    """
+     
+    mask_no_faces = hair_mask.copy()
+
     for (x, y, w, h) in faces:
-        # Ajuste horizontal: reduz a largura da região excluída
-        left_margin = int(w * width_reduction / 1)
-        print('Left Margin', left_margin)
-        x_start_face = max(10, x + left_margin)
+        left_margin = int(w * width_reduction)
+        x_start_face = max(0, x + left_margin)
         x_end_face = min(mask_no_faces.shape[1], x + w - left_margin)
 
-        # Ajuste vertical: preserva a parte superior do cabelo, se necessário
-        if preserve_hair:
-            y_start_face = max(0, y + int(h * 0))  # Exclui apenas abaixo de 30% da altura do rosto
-        else:
-            y_start_face = max(0, y)
+        #Define foreahead area
+        forehead_height = int(h * forehead_ratio)
+        y_start_forehead = max(0, y - forehead_height)
+        y_start_face = max(0, y + int(h * 0.1)) if preserve_hair else max(0, y)
+        y_end_face = min(mask_no_faces.shape[0], y + h + margin)
 
-        # Parte inferior do rosto com margem
-        y_end_face = min(y + h + margin, mask_no_faces.shape[0])
+        #Exclude face of forehead area
+        mask_no_faces[y_start_forehead:y_end_face, x_start_face:x_end_face] = 0
 
-        # Exclui a região ajustada do rosto
-        mask_no_faces[y_start_face:y_end_face, x_start_face:x_end_face] = 0
-        
-        # Exclui tudo abaixo da parte inferior do rosto
-        mask_no_faces[y_end_face:, :] = 0
-    
+        # mask_no_faces[y_start_face:y_end_face, x_start_face:x_end_face] = 0
+        mask_no_faces[y_end_face:, :] = 0  # Exclui abaixo do rosto
+
     return mask_no_faces
 
 
-def refine_mask(mask, min_area=MIN_AREA):
+def refine_mask(mask, min_area=300):
     """
-    Refina a máscara de cabelo removendo ruídos e pequenas áreas, com controle melhorado.
+        Refina a máscara removendo ruídos e pequenas áreas.
+        
+        Args:
+            mask (numpy.ndarray): Máscara binária a ser refinada.
+            min_area (int): Tamanho mínimo de área para manter na máscara.
+        
+        Returns:
+        numpy.ndarray: Máscara refinada.
     """
+
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
     refined_mask = np.zeros_like(mask)
+    
     for i in range(1, num_labels):  # Ignora o fundo
         if stats[i, cv2.CC_STAT_AREA] >= min_area:
             refined_mask[labels == i] = 255
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))  # Kernel maior para suavização
-    refined_mask = cv2.morphologyEx(refined_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))  # Kernel maior para suavização
+    refined_mask = cv2.morphologyEx(refined_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+
     return refined_mask
 
 def save_mask(mask, filename, masks_directory):
@@ -77,7 +91,31 @@ def save_mask(mask, filename, masks_directory):
     mask_filename = masks_directory / f"{filename.stem}.png"
     cv2.imwrite(str(mask_filename), mask)
 
-def process_image(image_file, face_cascade):
+def detect_faces_mediapipe(image):
+    """
+    Detecta rostos em uma imagem usando MediaPipe Face Detection.
+
+    Args:
+        image (numpy.ndarray): Imagem em formato BGR.
+
+    Returns:
+        list: Lista de coordenadas (x, y, w, h) dos rostos detectados.
+    """
+    with mp_face_detection.FaceDetection(min_detection_confidence=0.5) as face_detection:
+        results = face_detection.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        faces = []
+        if results.detections:
+            for detection in results.detections:
+                bboxC = detection.location_data.relative_bounding_box
+                ih, iw, _ = image.shape
+                x = int(bboxC.xmin * iw)
+                y = int(bboxC.ymin * ih)
+                w = int(bboxC.width * iw)
+                h = int(bboxC.height * ih)
+                faces.append((x, y, w, h))
+        return faces
+    
+def process_image(image_file, face_cascade=None):
     """
     Processa a imagem, detecta rosto e cabelo, e refina as máscaras.
     """
@@ -92,22 +130,21 @@ def process_image(image_file, face_cascade):
     scale_factor = 512 / height
     image = cv2.resize(image, (int(width * scale_factor), 512), interpolation=cv2.INTER_AREA)
 
-    # Conversão para escala de cinza e detecção de faces
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50))
-
     # Inicializa o MediaPipe Selfie Segmentation
     mp_selfie_segmentation = mp.solutions.selfie_segmentation
     with mp_selfie_segmentation.SelfieSegmentation(model_selection=1) as selfie_segmentation:
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         results = selfie_segmentation.process(image_rgb)
-        hair_mask = (results.segmentation_mask > 0.5).astype(np.uint8) * 255
+        hair_mask = (results.segmentation_mask > 0.6).astype(np.uint8) * 255
+
+    # Detecta rostos usando o MediaPipe Face Detection
+    faces = detect_faces_mediapipe(image)
 
     # Exclui regiões do rosto e partes inferiores
-    hair_mask_no_faces =  exclude_face_regions(hair_mask, faces, margin=2, width_reduction=0.1)
+    hair_mask_no_faces = exclude_face_regions(hair_mask, faces, margin=5, width_reduction=0.1, forehead_ratio=0.1)
 
     # Refina a máscara
-    refined_hair_mask = refine_mask(hair_mask_no_faces)
+    refined_hair_mask = refine_mask(hair_mask_no_faces, min_area=500)
 
     return refined_hair_mask, (image.shape[1], image.shape[0])
 
