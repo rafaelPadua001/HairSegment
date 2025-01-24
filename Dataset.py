@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 IMAGE_DIR = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/images"
 OUTPUT_CSV = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/annotations/dados_faces.csv"
 MASKS_DIR = "/home/rafael/Área de Trabalho/HairSegmentationTrain/HairSegment/dataset/newMasks"
-MARGIN = 5
+MARGIN = 1
 
 mp_face_detection = mp.solutions.face_detection
 
@@ -24,7 +24,7 @@ def load_face_detector():
         raise ValueError("Erro: Não foi possível carregar o Haarcascade!")
     return face_cascade
 
-def exclude_face_regions(hair_mask, faces, margin=5, width_reduction=0.1, forehead_ratio=0.1, preserve_hair=True):
+def exclude_face_regions(hair_mask, faces, margin=1, width_reduction=0.10, forehead_ratio=0.15, neck_expansion=10, preserve_hair=True, face_height_reduction=0.87):
     """
     Exclui regiões do rosto da máscara de cabelo, incluindo a testa com base em uma proporção ajustável.
     
@@ -43,26 +43,40 @@ def exclude_face_regions(hair_mask, faces, margin=5, width_reduction=0.1, forehe
     mask_no_faces = hair_mask.copy()
 
     for (x, y, w, h) in faces:
+        # Calcula a margem lateral para excluir as orelhas
         left_margin = int(w * width_reduction)
         x_start_face = max(0, x + left_margin)
         x_end_face = min(mask_no_faces.shape[1], x + w - left_margin)
 
-        #Define foreahead area
+        # Define a área da testa
         forehead_height = int(h * forehead_ratio)
-        y_start_forehead = max(0, y - forehead_height)
-        y_start_face = max(0, y + int(h * 0.1)) if preserve_hair else max(0, y)
-        y_end_face = min(mask_no_faces.shape[0], y + h + margin)
+        forehead_offset = int(h * forehead_ratio * 0.0)  # Desloca 50% da altura da testa para baixo
+        y_start_forehead = max(0, y - forehead_height + forehead_offset)
+      
 
-        #Exclude face of forehead area
+        # Ajusta a exclusão do rosto
+        y_start_face = max(0, y + int(h * 0.1)) if preserve_hair else max(0, y)
+        y_end_face = min(mask_no_faces.shape[0], y + h + margin - int(h * face_height_reduction))
+
+        # Calcula as margens para o pescoço (expansão para excluir ombros)
+        neck_with_expansion = int(w * neck_expansion)
+        x_start_neck = max(0, x - neck_with_expansion)
+        x_end_neck = min(mask_no_faces.shape[1], x + w + neck_with_expansion)
+        y_end_body = mask_no_faces.shape[0]  # Até o final da imagem
+        
+
+        # Exclui a área da testa
         mask_no_faces[y_start_forehead:y_end_face, x_start_face:x_end_face] = 0
 
-        # mask_no_faces[y_start_face:y_end_face, x_start_face:x_end_face] = 0
-        mask_no_faces[y_end_face:, :] = 0  # Exclui abaixo do rosto
+        # Exclui abaixo do rosto (pescoço e ombros)
+        mask_no_faces[int(y_end_face):int(y_end_body), int(x_start_neck):int(x_end_neck)] = 0
 
+    # Retorna a máscara ajustada
     return mask_no_faces
 
 
-def refine_mask(mask, min_area=300):
+
+def refine_mask(mask, min_area=2):
     """
         Refina a máscara removendo ruídos e pequenas áreas.
         
@@ -79,10 +93,12 @@ def refine_mask(mask, min_area=300):
     
     for i in range(1, num_labels):  # Ignora o fundo
         if stats[i, cv2.CC_STAT_AREA] >= min_area:
-            refined_mask[labels == i] = 255
+            centroid_y = stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT] // 2
+            if centroid_y < mask.shape[0] * 0.5:
+                refined_mask[labels == i] = 255
     
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))  # Kernel maior para suavização
-    refined_mask = cv2.morphologyEx(refined_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))  # Kernel maior para suavização
+    refined_mask = cv2.morphologyEx(refined_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
 
     return refined_mask
 
@@ -135,16 +151,16 @@ def process_image(image_file, face_cascade=None):
     with mp_selfie_segmentation.SelfieSegmentation(model_selection=1) as selfie_segmentation:
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         results = selfie_segmentation.process(image_rgb)
-        hair_mask = (results.segmentation_mask > 0.6).astype(np.uint8) * 255
+        hair_mask = (results.segmentation_mask > 0.4).astype(np.uint8) * 255
 
     # Detecta rostos usando o MediaPipe Face Detection
     faces = detect_faces_mediapipe(image)
 
     # Exclui regiões do rosto e partes inferiores
-    hair_mask_no_faces = exclude_face_regions(hair_mask, faces, margin=5, width_reduction=0.1, forehead_ratio=0.1)
+    hair_mask_no_faces = exclude_face_regions(hair_mask, faces, margin=1, width_reduction=0.10, forehead_ratio=0.15)
 
     # Refina a máscara
-    refined_hair_mask = refine_mask(hair_mask_no_faces, min_area=500)
+    refined_hair_mask = refine_mask(hair_mask_no_faces, min_area=2)
 
     return refined_hair_mask, (image.shape[1], image.shape[0])
 
