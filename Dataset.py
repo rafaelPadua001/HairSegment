@@ -30,7 +30,7 @@ def exclude_face_regions(
         faces,
         margin=0,
         width_reduction=0.15,
-        forehead_ratio=0.15,
+        forehead_ratio=0.01,
         neck_expansion=10,
         preserve_hair=True,
         face_height_reduction=0.87):
@@ -68,7 +68,7 @@ def exclude_face_regions(
         
         # Define os parâmetros da elipse
         center = (x + w // 2, y + h // 2)  # Centro do rosto
-        axes = (int(w * 0.9), int(h * 0.75))  # Semi-eixos da elipse (ajuste conforme necessário)
+        axes = (int(w * 0.5), int(h * 0.7))  # Semi-eixos da elipse (ajuste conforme necessário)
         angle = 0  # Ângulo de rotação da elipse
 
         # Desenha a elipse na máscara
@@ -86,7 +86,7 @@ def exclude_face_regions(
 
     return mask_no_faces
 
-def exclude_shadow_regions(image, hair_mask, faces, shadow_threshold=0.7):
+def exclude_shadow_regions(image, hair_mask, faces, shadow_threshold=0.9):
     """
     Exclui regiões escuras (sombras) dentro das áreas do rosto detectadas.
     
@@ -204,7 +204,7 @@ def process_image(image_file):
     faces = detect_faces_mediapipe(image)
 
     # Exclui regiões do rosto e partes inferiores
-    hair_mask_no_faces = exclude_face_regions(hair_mask, faces, margin=0, width_reduction=0.15, forehead_ratio=0.15)
+    hair_mask_no_faces = exclude_face_regions(hair_mask, faces, margin=0, width_reduction=0.15, forehead_ratio=0.01)
 
     # Refina a máscara
     refined_hair_mask = refine_mask(hair_mask_no_faces, min_area=2)
