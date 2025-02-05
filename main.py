@@ -143,9 +143,9 @@ else:
     model.compile(optimizer=Adam(), loss='binary_crossentropy', metrics=['accuracy'])
 
     callbacks = [
-        EarlyStopping(patience=990, restore_best_weights=True),
+        EarlyStopping(patience=60, restore_best_weights=True),
         ModelCheckpoint(filepath=os.path.join(OUTPUT_DIR, 'best_model.keras'), save_best_only=True),
-        ReduceLROnPlateau(patience=990)
+        ReduceLROnPlateau(patience=190)
     ]
 
     # Treinamento com ou sem validação
