@@ -30,10 +30,11 @@ def exclude_face_regions(
         faces,
         margin=0,
         width_reduction=0.15,
-        forehead_ratio=0.01,
-        neck_expansion=10,
+        forehead_ratio=0.2,
+        neck_expansion=1,
         preserve_hair=True,
-        face_height_reduction=0.87):
+        face_height_reduction=0.87,
+        ear_offset_ratio=0.10):
     """
     Exclui regiões do rosto da máscara de cabelo usando uma elipse para melhor ajuste.
     """
@@ -67,8 +68,8 @@ def exclude_face_regions(
         ellipse_mask = np.zeros_like(mask_no_faces)
         
         # Define os parâmetros da elipse
-        center = (x + w // 2, y + h // 2)  # Centro do rosto
-        axes = (int(w * 0.5), int(h * 0.7))  # Semi-eixos da elipse (ajuste conforme necessário)
+        center = (x + w // 2, y + int(h * (0.55 - ear_offset_ratio)))  # Centro do rosto
+        axes = (int(w * 0.65), int(h * 0.65))  # Semi-eixos da elipse (ajuste conforme necessário)
         angle = 0  # Ângulo de rotação da elipse
 
         # Desenha a elipse na máscara
@@ -78,15 +79,15 @@ def exclude_face_regions(
         mask_no_faces[ellipse_mask > 0] = 0
 
         # Expansão do pescoço (opcional)
-        neck_with_expansion = int(w * neck_expansion)
-        x_start_neck = max(0, x - neck_with_expansion)
-        x_end_neck = min(mask_no_faces.shape[1], x + w + neck_with_expansion)
-        y_end_body = mask_no_faces.shape[0]  # Até o final da imagem
-        mask_no_faces[y_end_forehead:y_end_body, x_start_neck:x_end_neck] = 0
+        # neck_with_expansion = int(w * neck_expansion)
+        # x_start_neck = max(0, x - neck_with_expansion)
+        # x_end_neck = min(mask_no_faces.shape[1], x + w + neck_with_expansion)
+        # y_end_body = mask_no_faces.shape[0]  # Até o final da imagem
+        # mask_no_faces[y_end_forehead:y_end_body, x_start_neck:x_end_neck] = 0
 
     return mask_no_faces
 
-def exclude_shadow_regions(image, hair_mask, faces, shadow_threshold=0.9):
+def exclude_shadow_regions(image, hair_mask, faces, shadow_threshold=255):
     """
     Exclui regiões escuras (sombras) dentro das áreas do rosto detectadas.
     
@@ -123,7 +124,7 @@ def exclude_shadow_regions(image, hair_mask, faces, shadow_threshold=0.9):
 
     return shadow_free_mask
 
-def refine_mask(mask, min_area=2):
+def refine_mask(mask, min_area=2, d=9, sigma_color=100, sigma_space=100):
     """
         Refina a máscara removendo ruídos e pequenas áreas.
         
@@ -147,6 +148,8 @@ def refine_mask(mask, min_area=2):
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))  # Kernel maior para suavização
     refined_mask = cv2.morphologyEx(refined_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
 
+    #desfoque gaussiano
+    refined_mask = cv2.bilateralFilter(refined_mask, d, sigma_color, sigma_space)
     return refined_mask
 
 def save_mask(mask, filename, masks_directory):
@@ -204,7 +207,7 @@ def process_image(image_file):
     faces = detect_faces_mediapipe(image)
 
     # Exclui regiões do rosto e partes inferiores
-    hair_mask_no_faces = exclude_face_regions(hair_mask, faces, margin=0, width_reduction=0.15, forehead_ratio=0.01)
+    hair_mask_no_faces = exclude_face_regions(hair_mask, faces, margin=0, width_reduction=0.15, forehead_ratio=0.01, ear_offset_ratio=0.10)
 
     # Refina a máscara
     refined_hair_mask = refine_mask(hair_mask_no_faces, min_area=2)
