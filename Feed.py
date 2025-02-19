@@ -17,7 +17,7 @@ def preprocess_image(image_path):
         raise FileNotFoundError(f"Não foi possível carregar a imagem: {image_path}")
     
     # Redimensionar para o tamanho que o modelo espera
-    img = cv2.resize(img, (256, 256))
+    img = cv2.resize(img, (512, 512))
     
     # Normalizar os pixels para a faixa [0, 1]
     img = img / 255.0
@@ -49,7 +49,7 @@ for file_name, prediction in zip(file_names, predictions):
 
     # Ler a imagem original para visualização
     original_img = cv2.imread(os.path.join(test_images_path, file_name))
-    original_img_resized = cv2.resize(original_img, (256, 256))  # Redimensionar a imagem original
+    original_img_resized = cv2.resize(original_img, (512, 512))  # Redimensionar a imagem original
 
     # Mostrar a imagem original e a máscara prevista lado a lado
     plt.figure(figsize=(15, 5))

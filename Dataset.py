@@ -29,12 +29,12 @@ def exclude_face_regions(
         hair_mask, 
         faces,
         margin=0,
-        width_reduction=0.15,
-        forehead_ratio=0.2,
+        width_reduction=0.16,
+        forehead_ratio=0.22,
         neck_expansion=1,
         preserve_hair=True,
         face_height_reduction=0.87,
-        ear_offset_ratio=0.10):
+        ear_offset_ratio=0.12):
     """
     Exclui regiões do rosto da máscara de cabelo usando uma elipse para melhor ajuste.
     """
@@ -55,12 +55,15 @@ def exclude_face_regions(
         forehead_region = mask_no_faces[y_start_forehead:y_end_forehead, x_start_face:x_end_face]
         for col in range(forehead_region.shape[1]):
             column_data = forehead_region[:, col]
-            hair_top_idx = np.argmax(column_data > 0)  # Encontra o topo do cabelo
+            if np.any(column_data > 0):
+                hair_top_idx = np.argmax(column_data > 0)  # Encontra o topo do cabelo
 
-            if hair_top_idx > 0:  # Se o cabelo estiver presente na coluna
-                gradient = np.linspace(1, 0, len(column_data[hair_top_idx:]))
-                forehead_region[hair_top_idx:, col] *= gradient[:len(forehead_region[hair_top_idx:])]
-
+                if hair_top_idx > 0:  # Se o cabelo estiver presente na coluna
+                    gradient = np.linspace(1, 0, len(column_data[hair_top_idx:]))
+                    forehead_region[hair_top_idx:, col] *= gradient[:len(forehead_region[hair_top_idx:])]
+            else:
+                continue
+            
         # Atualiza a máscara com a testa suavizada
         mask_no_faces[y_start_forehead:y_end_forehead, x_start_face:x_end_face] = forehead_region
 
